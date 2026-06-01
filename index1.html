@@ -1,0 +1,1132 @@
+Here is the complete, updated code for your premium light-themed dashboard, **`water_monitor_dashboard.html`**, configured with your new ThingSpeak Channel ID **`3395185`**:
+
+[water_monitor_dashboard.html](file:///c:/Users/User/Documents/Engineering%20Programming/water_monitor_dashboard.html)
+
+```html
+<!doctype html>
+<html class="h-full">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Water Monitor Dashboard</title>
+    <meta name="description" content="Premium real-time water pressure, quality, and flow monitoring dashboard for ESP32">
+
+    <!-- Tailwind CSS (Optimized for premium light theme) -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+
+    <!-- Chart.js and Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+    <!-- Google Font (Outfit and Plus Jakarta Sans) -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: #f8fafc;
+            background-image: radial-gradient(at 0% 0%, rgba(224, 242, 254, 0.4) 0px, transparent 50%),
+                              radial-gradient(at 100% 100%, rgba(224, 242, 254, 0.4) 0px, transparent 50%);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 30px rgba(15, 23, 42, 0.03);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sensor-card {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sensor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
+            border-color: rgba(14, 165, 233, 0.4);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.7); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 999px;
+        }
+
+        /* Gauge progress ring animation */
+        .gauge-ring {
+            transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+
+<body class="h-full min-h-screen text-slate-800 antialiased">
+
+<div id="app" class="w-full min-h-screen flex flex-col overflow-auto">
+
+    <!-- ======================================================
+         HEADER
+    ====================================================== -->
+    <header class="sticky top-0 z-50 px-6 py-4 flex items-center justify-between glass-panel backdrop-blur-md"
+            style="border-top: none; border-left: none; border-right: none;">
+
+        <div class="flex items-center gap-4">
+            <div class="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden"
+                 style="background: linear-gradient(135deg, #0ea5e9, #6366f1);">
+                <div class="absolute inset-0 bg-white/10 opacity-50 mix-blend-overlay"></div>
+                <i data-lucide="droplets" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">ABT Water System</h1>
+                    <span class="text-xs px-2 py-0.5 rounded-md font-bold bg-sky-100 text-sky-700 border border-sky-200/30">LIVE</span>
+                </div>
+                <p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                    <span class="font-semibold text-slate-600">ThingSpeak Ch. 3395185</span>
+                    <span>•</span>
+                    <span id="live-time" class="font-mono text-slate-700">--:--:-- --</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Connection status badge -->
+            <div id="conn-badge" class="status-badge bg-slate-200/50 text-slate-600">
+                <span class="pulse-dot bg-slate-400"></span>
+                <span id="conn-text" class="font-mono">Connecting…</span>
+            </div>
+
+            <!-- Sync Button -->
+            <button id="sync-btn" onclick="fetchThingSpeakData()"
+                class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-md shadow-sky-500/20 transition-all hover:opacity-90 hover:scale-[1.02] active:scale-95"
+                style="background: linear-gradient(135deg, #0ea5e9, #6366f1);">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                Sync Now
+            </button>
+
+            <!-- Reset layout button -->
+            <button id="clear-btn" onclick="clearDashboardData()"
+                class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 hover:border-rose-200 active:scale-95 transition-all">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                Clear
+            </button>
+
+            <!-- CSV Export button -->
+            <button id="download-btn"
+                class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-slate-700 border border-slate-200/50 hover:bg-slate-50 active:scale-95 transition-all">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                Export
+            </button>
+        </div>
+    </header>
+
+    <main class="p-6 space-y-6 max-w-screen-2xl w-full mx-auto flex-1">
+
+        <!-- ======================================================
+             SYSTEM DIAGNOSIS BANNER
+        ====================================================== -->
+        <div id="diag-banner" class="diag-banner glass-panel transition-all duration-300">
+            <div id="diag-icon-wrap" class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-inner"
+                 style="background: rgba(148, 163, 184, 0.1);">
+                <i id="diag-icon" data-lucide="loader" class="w-6 h-6 text-slate-500"></i>
+            </div>
+            <div class="space-y-0.5">
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Automated Diagnosis System</p>
+                <p id="diag-text" class="text-base text-slate-700 font-semibold leading-snug">Waiting for first data sync…</p>
+                <p id="diag-subtext" class="text-xs text-slate-500">Please trigger a data sync to run automatic system checks.</p>
+            </div>
+        </div>
+
+        <!-- ======================================================
+             SENSOR CARDS WITH RADIAL GAUGES
+        ====================================================== -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+            <!-- TEMPERATURE -->
+            <div class="sensor-card glass-panel rounded-3xl p-6 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest block">Temperature</span>
+                        <span class="text-[10px] text-orange-500 font-semibold uppercase tracking-wider mt-0.5 block">Liquid Thermal</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-md bg-orange-50">
+                        <i data-lucide="thermometer" class="w-5 h-5 text-orange-500"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between gap-4 py-2">
+                    <div class="space-y-1">
+                        <div class="flex items-baseline">
+                            <span id="val-temp" class="text-4xl font-extrabold text-slate-900 tracking-tight">--</span>
+                            <span class="text-lg font-bold text-slate-500 ml-1">°C</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Normal Range: 10–40 °C</p>
+                    </div>
+
+                    <!-- Circular Radial Gauge -->
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <svg class="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="34" stroke="currentColor" class="text-slate-200" stroke-width="5" fill="transparent" />
+                            <circle id="gauge-temp" cx="40" cy="40" r="34" stroke="currentColor" class="text-orange-500 gauge-ring" stroke-width="5" fill="transparent"
+                                    stroke-dasharray="213.6" stroke-dashoffset="213.6" stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute text-[10px] font-bold text-slate-500" id="gauge-temp-pct">0%</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Sensor Status:</span>
+                    <span id="badge-temp" class="text-[10px] font-bold text-emerald-500">ACTIVE</span>
+                </div>
+            </div>
+
+            <!-- PRESSURE -->
+            <div class="sensor-card glass-panel rounded-3xl p-6 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest block">System Pressure</span>
+                        <span class="text-[10px] text-violet-500 font-semibold uppercase tracking-wider mt-0.5 block">Hydraulic Force</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-md bg-violet-50">
+                        <i data-lucide="gauge" class="w-5 h-5 text-violet-500"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between gap-4 py-2">
+                    <div class="space-y-1">
+                        <div class="flex items-baseline">
+                            <span id="val-pressure" class="text-4xl font-extrabold text-slate-900 tracking-tight">--</span>
+                            <span class="text-lg font-bold text-slate-500 ml-1">PSI</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Static Normal: ≥ 10 PSI</p>
+                    </div>
+
+                    <!-- Circular Radial Gauge -->
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <svg class="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="34" stroke="currentColor" class="text-slate-200" stroke-width="5" fill="transparent" />
+                            <circle id="gauge-pressure" cx="40" cy="40" r="34" stroke="currentColor" class="text-violet-500 gauge-ring" stroke-width="5" fill="transparent"
+                                    stroke-dasharray="213.6" stroke-dashoffset="213.6" stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute text-[10px] font-bold text-slate-500" id="gauge-press-pct">0%</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Threshold:</span>
+                    <span id="badge-pressure" class="status-badge py-0.5 px-2 bg-slate-100 text-slate-500">--</span>
+                </div>
+            </div>
+
+            <!-- FLOW RATE -->
+            <div class="sensor-card glass-panel rounded-3xl p-6 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest block">Flow Velocity</span>
+                        <span class="text-[10px] text-emerald-500 font-semibold uppercase tracking-wider mt-0.5 block">Discharge Rate</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-md bg-emerald-50">
+                        <i data-lucide="waves" class="w-5 h-5 text-emerald-500"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between gap-4 py-2">
+                    <div class="space-y-1">
+                        <div class="flex items-baseline">
+                            <span id="val-flow" class="text-4xl font-extrabold text-slate-900 tracking-tight">--</span>
+                            <span class="text-lg font-bold text-slate-500 ml-1">L/m</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Active Normal: 2–15 L/min</p>
+                    </div>
+
+                    <!-- Circular Radial Gauge -->
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <svg class="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="34" stroke="currentColor" class="text-slate-200" stroke-width="5" fill="transparent" />
+                            <circle id="gauge-flow" cx="40" cy="40" r="34" stroke="currentColor" class="text-emerald-500 gauge-ring" stroke-width="5" fill="transparent"
+                                    stroke-dasharray="213.6" stroke-dashoffset="213.6" stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute text-[10px] font-bold text-slate-500" id="gauge-flow-pct">0%</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Condition:</span>
+                    <span id="badge-flow" class="status-badge py-0.5 px-2 bg-slate-100 text-slate-500">--</span>
+                </div>
+            </div>
+
+            <!-- TDS (WATER PURITY) -->
+            <div class="sensor-card glass-panel rounded-3xl p-6 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest block">Water Purity</span>
+                        <span class="text-[10px] text-cyan-500 font-semibold uppercase tracking-wider mt-0.5 block">TDS Analysis</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-md bg-cyan-50">
+                        <i data-lucide="droplet-off" class="w-5 h-5 text-cyan-500"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between gap-4 py-2">
+                    <div class="space-y-1">
+                        <div class="flex items-baseline">
+                            <span id="val-tds" class="text-4xl font-extrabold text-slate-900 tracking-tight">--</span>
+                            <span class="text-lg font-bold text-slate-500 ml-1">ppm</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Pure Water Threshold: ≤ 50</p>
+                    </div>
+
+                    <!-- Circular Radial Gauge -->
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <svg class="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="34" stroke="currentColor" class="text-slate-200" stroke-width="5" fill="transparent" />
+                            <circle id="gauge-tds" cx="40" cy="40" r="34" stroke="currentColor" class="text-cyan-500 gauge-ring" stroke-width="5" fill="transparent"
+                                    stroke-dasharray="213.6" stroke-dashoffset="213.6" stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute text-[10px] font-bold text-slate-500" id="gauge-tds-pct">0%</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Purity Rating:</span>
+                    <span id="badge-tds" class="status-badge py-0.5 px-2 bg-slate-100 text-slate-500">--</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ======================================================
+             CHARTS (2-column grid)
+        ====================================================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="thermometer" class="w-4 h-4 text-orange-500"></i>
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Water Temperature History</h3>
+                    </div>
+                    <span class="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-extrabold uppercase font-mono">Real-Time</span>
+                </div>
+                <div class="h-[240px]"><canvas id="tempChart"></canvas></div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="gauge" class="w-4 h-4 text-violet-500"></i>
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Hydrostatic Pressure Trend</h3>
+                    </div>
+                    <span class="text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded font-extrabold uppercase font-mono">Real-Time</span>
+                </div>
+                <div class="h-[240px]"><canvas id="pressureChart"></canvas></div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="waves" class="w-4 h-4 text-emerald-500"></i>
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Flow Velocity Graph</h3>
+                    </div>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-extrabold uppercase font-mono">Real-Time</span>
+                </div>
+                <div class="h-[240px]"><canvas id="flowChart"></canvas></div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="droplet-off" class="w-4 h-4 text-cyan-500"></i>
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Water Purity Metric (TDS)</h3>
+                    </div>
+                    <span class="text-[10px] bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-extrabold uppercase font-mono">Real-Time</span>
+                </div>
+                <div class="h-[240px]"><canvas id="tdsChart"></canvas></div>
+            </div>
+
+            <!-- WATER SAFETY DONUT -->
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex items-center justify-between mb-1">
+                    <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Historical Quality Distribution</h3>
+                    <span class="text-[10px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded font-extrabold uppercase font-mono">TDS Threshold 50</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Based on rolling evaluation of the last 30 feeds</p>
+                <div class="h-[220px]"><canvas id="pieChart1"></canvas></div>
+            </div>
+
+            <!-- FLOW vs PRESSURE DONUT -->
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">Volumetric Balance Index</h3>
+                <p class="text-xs text-slate-400 mb-4">Comparison ratio of pressure force (PSI) vs discharge rate (L/min)</p>
+                <div class="h-[220px]"><canvas id="pieChart2"></canvas></div>
+            </div>
+
+        </div>
+
+        <!-- ======================================================
+             RECENT READINGS TABLE
+        ====================================================== -->
+        <div class="glass-panel rounded-3xl p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 uppercase tracking-wider">System Telemetry Log</h3>
+                    <p class="text-xs text-slate-400">Historical listing of incoming sensor packages from ESP32</p>
+                </div>
+                <span id="last-sync" class="text-xs font-semibold px-4 py-2 rounded-xl bg-slate-100 border border-slate-200/40 text-slate-500">Not yet synced</span>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-slate-100">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-slate-100/50 text-slate-500 uppercase text-[10px] tracking-wider font-extrabold" style="border-bottom: 1px solid rgba(226, 232, 240, 0.4);">
+                            <th class="py-4 px-6 text-left">Transmission Time</th>
+                            <th class="py-4 px-6 text-right">Temp (°C)</th>
+                            <th class="py-4 px-6 text-right">Pressure (PSI)</th>
+                            <th class="py-4 px-6 text-right">Flow (L/min)</th>
+                            <th class="py-4 px-6 text-right">TDS (ppm)</th>
+                            <th class="py-4 px-6 text-right">System Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="readings-table" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400 text-xs">
+                                <div class="flex flex-col items-center gap-2">
+                                    <i data-lucide="loader" class="w-8 h-8 text-sky-500 animate-spin"></i>
+                                    <span>Waiting for system initialization...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<script>
+
+// ============================================================
+// CONFIG — mirrors ESP32 hardware constants
+// ============================================================
+const CHANNEL_ID = '3395185';
+
+const PRESS_NORMAL_STATIC = 10.0;
+const PRESS_LOW_WARNING   = 5.0;
+const PRESS_CRITICAL_LOW  = 2.0;
+const PRESS_MAX_PSI       = 100.0;
+
+const FLOW_ZERO_MAX    = 0.1;
+const FLOW_NORMAL_MIN  = 2.0;
+const FLOW_EXTREME_HIGH = 15.0;
+
+const TDS_DANGER_THRESHOLD = 50.0;
+
+// ============================================================
+// STATE
+// ============================================================
+let allData = [];
+
+// ============================================================
+// CHART INSTANCES
+// ============================================================
+let tempChart, pressureChart, flowChart, tdsChart;
+let pieChart1, pieChart2;
+
+// ============================================================
+// RESOLVE BASE URL FOR LOCAL / CLOUD FETCHING
+// ============================================================
+function getBaseUrl() {
+    if (window.location.protocol === 'file:' || 
+        window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1') {
+        return 'http://abtwater.local';
+    }
+    return ''; // Relative path when running on ESP32 web server
+}
+
+// ============================================================
+// CHART FACTORY
+// ============================================================
+function createLineChart(id, label, color, dangerLine) {
+    const gridColor = 'rgba(226, 232, 240, 0.8)';
+    const textColor = '#475569';
+
+    const annotations = dangerLine != null ? {
+        plugins: {
+            annotation: {
+                annotations: {
+                    threshold: {
+                        type: 'line',
+                        yMin: dangerLine,
+                        yMax: dangerLine,
+                        borderColor: 'rgba(239, 68, 68, 0.6)',
+                        borderWidth: 2,
+                        borderDash: [6, 6],
+                        label: {
+                            display: true,
+                            content: `Max Allowed Limit: ${dangerLine} ppm`,
+                            position: 'end',
+                            backgroundColor: 'rgba(239, 68, 68, 0.85)',
+                            color: '#fff',
+                            font: { size: 9, weight: 'bold', family: 'Plus Jakarta Sans' },
+                            padding: 5,
+                            borderRadius: 4
+                        }
+                    }
+                }
+            }
+        }
+    } : {};
+
+    return new Chart(document.getElementById(id), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label,
+                data: [],
+                borderColor: color,
+                backgroundColor: color + '15',
+                fill: true,
+                tension: 0.35,
+                pointRadius: 2,
+                pointHoverRadius: 5,
+                borderWidth: 2.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                intersect: false,
+                mode: 'index',
+            },
+            plugins: {
+                legend: { labels: { color: textColor, font: { size: 10, weight: 600, family: 'Plus Jakarta Sans' } } },
+                ...annotations.plugins
+            },
+            scales: {
+                x: {
+                    ticks: { color: textColor, font: { size: 9, family: 'Plus Jakarta Sans' } },
+                    grid:  { color: gridColor }
+                },
+                y: {
+                    ticks: { color: textColor, font: { size: 9, family: 'Plus Jakarta Sans' } },
+                    grid:  { color: gridColor }
+                }
+            }
+        }
+    });
+}
+
+// ============================================================
+// INIT ALL CHARTS
+// ============================================================
+function initCharts() {
+    tempChart     = createLineChart('tempChart',     'Temperature (°C)', '#f97316');
+    pressureChart = createLineChart('pressureChart', 'Pressure (PSI)',    '#7c3aed');
+    flowChart     = createLineChart('flowChart',     'Flow Rate (L/min)', '#10b981');
+    tdsChart      = createLineChart('tdsChart',      'TDS (ppm)',         '#0ea5e9', TDS_DANGER_THRESHOLD);
+
+    const textColor = '#475569';
+
+    // Water Safety Donut
+    pieChart1 = new Chart(document.getElementById('pieChart1'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Purity Compliant (≤50 ppm)', 'Contaminated (>50 ppm)'],
+            datasets: [{
+                data: [1, 0],
+                backgroundColor: ['#10b981', '#ef4444'],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { labels: { color: textColor, font: { size: 10, weight: 600, family: 'Plus Jakarta Sans' } } }
+            },
+            cutout: '65%'
+        }
+    });
+
+    // Flow vs Pressure Donut
+    pieChart2 = new Chart(document.getElementById('pieChart2'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Flow Force Ratio', 'Backpressure Ratio'],
+            datasets: [{
+                data: [0, 0],
+                backgroundColor: ['#10b981', '#7c3aed'],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { labels: { color: textColor, font: { size: 10, weight: 600, family: 'Plus Jakarta Sans' } } }
+            },
+            cutout: '65%'
+        }
+    });
+}
+
+// ============================================================
+// SYSTEM DIAGNOSIS — mirrors evaluateSystemState() in ESP32
+// ============================================================
+function evaluateSystemState(pPSI, fRate) {
+    if (fRate <= 0.1) {
+        return {
+            level: 'normal',
+            text: 'STATUS: Water flow stopped',
+            sub: 'The system flow rate is zero/idle. Pressurized lines are standing by.'
+        };
+    }
+    if (fRate > 0.1 && pPSI >= 5.0) {
+        return {
+            level: 'normal',
+            text: 'STATUS: Water flowing normally',
+            sub: 'Fluid flow matches pressure requirements. Normal water extraction in progress.'
+        };
+    }
+    if (fRate > 0.1 && pPSI < 5.0) {
+        return {
+            level: 'danger',
+            text: 'WARNING: Critically low pressure during active water flow!',
+            sub: 'Active water flow detected with system pressure under 5.0 PSI! Check for possible pump issues, pipe leakage, or line weeping.'
+        };
+    }
+    return {
+        level: 'analyzing',
+        text: 'STATUS: Monitoring prototype',
+        sub: 'Waiting for subsequent sensor transmission packet to verify state stability.'
+    };
+}
+
+// ============================================================
+// UPDATE DIAGNOSIS BANNER
+// ============================================================
+function updateDiagBanner(pPSI, fRate) {
+    const diag = evaluateSystemState(pPSI, fRate);
+    const banner  = document.getElementById('diag-banner');
+    const iconWrap = document.getElementById('diag-icon-wrap');
+    const text    = document.getElementById('diag-text');
+    const subtext = document.getElementById('diag-subtext');
+
+    const styles = {
+        normal:    { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', ic: '#10b981', ii: 'shield-check'   },
+        warning:   { bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)', ic: '#f59e0b', ii: 'alert-triangle' },
+        danger:    { bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)',  ic: '#ef4444', ii: 'zap'            },
+        critical:  { bg: 'rgba(220, 38, 38, 0.15)', border: 'rgba(220, 38, 38, 0.4)',  ic: '#dc2626', ii: 'alert-octagon'  },
+        analyzing: { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.2)', ic: '#64748b', ii: 'loader'         }
+    };
+
+    const s = styles[diag.level] || styles.analyzing;
+    
+    // Apply styling with CSS
+    banner.style.backgroundColor = s.bg;
+    banner.style.borderColor = s.border;
+    iconWrap.style.backgroundColor = s.bg;
+    
+    iconWrap.innerHTML = `<i id="diag-icon" data-lucide="${s.ii}" style="width:24px;height:24px;color:${s.ic};" class="${diag.level === 'danger' || diag.level === 'critical' ? 'animate-bounce' : ''}"></i>`;
+    
+    text.textContent = diag.text;
+    text.style.color = s.ic;
+    subtext.textContent = diag.sub;
+
+    lucide.createIcons();
+}
+
+// ============================================================
+// GAUGES & BADGES UPDATE
+// ============================================================
+function getPressureStatus(psi) {
+    if (psi <= 0)                       return { label: 'No pressure', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+    if (psi <= PRESS_CRITICAL_LOW)      return { label: 'Supply Outage', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+    if (psi < PRESS_LOW_WARNING)        return { label: 'Low pressure', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' };
+    if (psi < PRESS_NORMAL_STATIC)      return { label: 'Static Low', color: '#fb923c', bg: 'rgba(249,115,22,0.1)' };
+    return                               { label: 'Normal static', color: '#10b981', bg: 'rgba(16,185,129,0.1)' };
+}
+
+function getFlowStatus(flow) {
+    if (flow <= FLOW_ZERO_MAX)                               return { label: 'Idle Standby', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
+    if (flow >= FLOW_NORMAL_MIN && flow < 6.0)               return { label: 'Optimal Flow', color: '#10b981', bg: 'rgba(16,185,129,0.1)' };
+    if (flow >= 6.0 && flow < FLOW_EXTREME_HIGH)             return { label: 'Elevated Flow', color: '#fb923c', bg: 'rgba(249,115,22,0.1)' };
+    if (flow >= FLOW_EXTREME_HIGH)                           return { label: 'Major Flow / Leak!', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+    return                                                    { label: 'Clog / Low Flow', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' };
+}
+
+function getTDSStatus(tds) {
+    if (tds <= TDS_DANGER_THRESHOLD) return { label: 'Pure / Safe', color: '#10b981', bg: 'rgba(16,185,129,0.1)' };
+    return                            { label: 'DANGER / CONTAMINATED', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+}
+
+function applyBadge(id, st) {
+    const el = document.getElementById(id);
+    el.textContent = st.label;
+    el.style.color      = st.color;
+    el.style.backgroundColor = st.bg;
+}
+
+function updateRadialGauge(id, value, maxVal) {
+    const circle = document.getElementById(id);
+    const text = document.getElementById(id + '-pct');
+    if (!circle) return;
+
+    const percent = Math.min(100, Math.max(0, (value / maxVal) * 100));
+    
+    // Circumference = 2 * PI * r = 2 * 3.14159 * 34 = 213.6
+    const circumference = 213.6;
+    const offset = circumference - (percent / 100) * circumference;
+    
+    circle.style.strokeDashoffset = offset;
+    if (text) {
+        text.textContent = Math.round(percent) + '%';
+    }
+}
+
+// ============================================================
+// FETCH DATA FROM THINGSPEAK
+// ============================================================
+async function fetchThingSpeakData() {
+    const btn = document.getElementById('sync-btn');
+    const icon = btn.querySelector('i') || btn.querySelector('svg');
+    btn.style.opacity = '0.6';
+    if (icon) icon.classList.add('animate-spin');
+
+    const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?results=30&_=${Date.now()}`;
+
+    try {
+        const res  = await fetch(url);
+        const data = await res.json();
+
+        // Field mapping
+        allData = data.feeds.map(feed => ({
+            id:          feed.entry_id,
+            timestamp:   feed.created_at,
+            temperature: parseFloat(feed.field1) || 0,
+            pressure:    parseFloat(feed.field2) || 0,
+            flow_rate:   parseFloat(feed.field3) || 0,
+            tds:         parseFloat(feed.field4) || 0
+        })).reverse(); // newest first
+
+        setConnected(true, 'Live (ThingSpeak)');
+        updateUI();
+
+        const lastSyncEl = document.getElementById('last-sync');
+        lastSyncEl.textContent = 'Last cloud sync: ' + new Date().toLocaleTimeString();
+        
+        // Premium Flash feedback
+        lastSyncEl.style.color = '#10b981';
+        lastSyncEl.style.fontWeight = 'bold';
+        lastSyncEl.style.transition = 'color 0.3s ease';
+        setTimeout(() => {
+            lastSyncEl.style.color = '';
+            lastSyncEl.style.fontWeight = '';
+        }, 2000);
+
+        // Flash Sync button success
+        const originalBg = btn.style.background;
+        const originalHtml = btn.innerHTML;
+        btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> Synced!`;
+        lucide.createIcons();
+        
+        setTimeout(() => {
+            btn.style.background = originalBg;
+            btn.innerHTML = originalHtml;
+            lucide.createIcons();
+        }, 1500);
+
+    } catch(e) {
+        console.error('ThingSpeak Fetch error:', e);
+        if (allData.length === 0) {
+            setConnected(false, 'Offline');
+        }
+
+        // Flash Sync button error
+        const originalBg = btn.style.background;
+        const originalHtml = btn.innerHTML;
+        btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        btn.innerHTML = `<i data-lucide="x" class="w-4 h-4"></i> Failure`;
+        lucide.createIcons();
+        
+        setTimeout(() => {
+            btn.style.background = originalBg;
+            btn.innerHTML = originalHtml;
+            lucide.createIcons();
+        }, 1500);
+    }
+
+    if (icon) icon.classList.remove('animate-spin');
+    btn.style.opacity = '1';
+}
+
+// ============================================================
+// FETCH REAL-TIME DATA DIRECTLY FROM ESP32
+// ============================================================
+async function fetchRealTimeData() {
+    const baseUrl = getBaseUrl();
+    const url = `${baseUrl}/api/data?_=${Date.now()}`;
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1800);
+        
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error('Local server offline');
+        const data = await res.json();
+
+        const liveItem = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            temperature: parseFloat(data.temperature) || 0,
+            pressure:    parseFloat(data.pressure) || 0,
+            flow_rate:   parseFloat(data.flow_rate) || 0,
+            tds:         parseFloat(data.tds) || 0
+        };
+
+        if (allData.length > 0) {
+            allData.unshift(liveItem);
+            if (allData.length > 50) allData.pop();
+        } else {
+            allData = [liveItem];
+        }
+
+        setConnected(true, 'Live (ESP32)');
+        updateUI();
+
+        document.getElementById('last-sync').textContent =
+            'Real-Time ESP32: ' + new Date().toLocaleTimeString();
+
+    } catch(e) {
+        console.log('ESP32 Live Fetch skipped/failed:', e.message);
+        if (allData.length > 0) {
+            const currentBadgeText = document.getElementById('conn-text').textContent;
+            if (currentBadgeText.includes('ESP32')) {
+                setConnected(true, 'Standby (ThingSpeak)');
+            }
+        } else {
+            setConnected(false, 'Offline');
+        }
+    }
+}
+
+// ============================================================
+// CONNECTION BADGE
+// ============================================================
+function setConnected(ok, textStr = 'Live') {
+    const badge = document.getElementById('conn-badge');
+    const text  = document.getElementById('conn-text');
+    const dot   = badge.querySelector('.pulse-dot');
+    
+    if (ok) {
+        if (textStr.includes('ESP32')) {
+            badge.style.background = 'rgba(16,185,129,0.15)';
+            badge.style.color      = '#10b981';
+            dot.style.background   = '#10b981';
+        } else {
+            badge.style.background = 'rgba(99,102,241,0.15)';
+            badge.style.color      = '#6366f1';
+            dot.style.background   = '#6366f1';
+        }
+        text.textContent = textStr;
+    } else {
+        badge.style.background = 'rgba(239,68,68,0.15)';
+        badge.style.color      = '#ef4444';
+        dot.style.background   = '#ef4444';
+        text.textContent       = textStr;
+    }
+}
+
+// ============================================================
+// UPDATE ALL UI
+// ============================================================
+function updateUI() {
+    if (!allData.length) return;
+
+    const latest = allData[0]; // newest
+    const { temperature: T, pressure: P, flow_rate: F, tds: TDS } = latest;
+
+    // --- Sensor Cards ---
+    document.getElementById('val-temp').textContent     = T.toFixed(1);
+    document.getElementById('val-pressure').textContent = P.toFixed(1);
+    document.getElementById('val-flow').textContent     = F.toFixed(2);
+    document.getElementById('val-tds').textContent      = TDS.toFixed(0);
+
+    // --- SVG Gauge Rings ---
+    updateRadialGauge('gauge-temp', T, 60.0);
+    updateRadialGauge('gauge-pressure', P, PRESS_MAX_PSI);
+    updateRadialGauge('gauge-flow', F, FLOW_EXTREME_HIGH);
+    updateRadialGauge('gauge-tds', TDS, 200.0);
+
+    // --- Colors & Status Badges ---
+    applyBadge('badge-pressure', getPressureStatus(P));
+    applyBadge('badge-flow',     getFlowStatus(F));
+    applyBadge('badge-tds',      getTDSStatus(TDS));
+
+    // --- System Diagnosis Banner ---
+    updateDiagBanner(P, F);
+
+    // --- Chart data (chronological order) ---
+    const chrono = [...allData].reverse();
+    const labels = chrono.map(d =>
+        new Date(d.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })
+    );
+
+    function updateChart(chart, key) {
+        if (!chart) return;
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = chrono.map(d => d[key]);
+        chart.update();
+    }
+
+    updateChart(tempChart,     'temperature');
+    updateChart(pressureChart, 'pressure');
+    updateChart(flowChart,     'flow_rate');
+    updateChart(tdsChart,      'tds');
+
+    // --- Water Safety Donut ---
+    let safe = 0, danger = 0;
+    allData.forEach(d => d.tds <= TDS_DANGER_THRESHOLD ? safe++ : danger++);
+    if (pieChart1) {
+        pieChart1.data.datasets[0].data = [safe, danger];
+        pieChart1.update();
+    }
+
+    // --- Flow vs Pressure Donut ---
+    if (pieChart2) {
+        pieChart2.data.datasets[0].data = [Math.max(F, 0.01), Math.max(P, 0.01)];
+        pieChart2.update();
+    }
+
+    // --- Table Logs ---
+    const tbody = document.getElementById('readings-table');
+    tbody.innerHTML = allData.slice(0, 15).map(item => {
+        const ts      = new Date(item.timestamp);
+        const tdsOk   = item.tds <= TDS_DANGER_THRESHOLD;
+        const pSt     = getPressureStatus(item.pressure);
+        const tsLabel = ts.toLocaleDateString('en-GB', { day:'2-digit', month:'short' })
+                      + ' ' + ts.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+        return `
+        <tr class="hover:bg-slate-50/40 transition-colors">
+            <td class="py-4 px-6 font-mono text-xs text-slate-500">${tsLabel}</td>
+            <td class="py-4 px-6 text-right font-bold text-orange-500">${item.temperature.toFixed(1)}</td>
+            <td class="py-4 px-6 text-right font-bold" style="color:${pSt.color};">${item.pressure.toFixed(1)}</td>
+            <td class="py-4 px-6 text-right font-bold text-emerald-500">${item.flow_rate.toFixed(2)}</td>
+            <td class="py-4 px-6 text-right font-bold" style="color:${tdsOk ? '#0ea5e9' : '#ef4444'};">${item.tds.toFixed(0)}</td>
+            <td class="py-4 px-6 text-right">
+                <span class="status-badge"
+                      style="background:${tdsOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};
+                             color:${tdsOk ? '#10b981' : '#ef4444'}; font-size:10px;">
+                    ${tdsOk ? 'Safe' : 'Danger'}
+                </span>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ============================================================
+// CSV EXPORT
+// ============================================================
+document.getElementById('download-btn').addEventListener('click', () => {
+    if (!allData.length) return;
+
+    let csv = 'Timestamp,Temperature (C),Pressure (PSI),Flow (L/min),TDS (ppm),TDS Status\n';
+    allData.forEach(d => {
+        const safe = d.tds <= TDS_DANGER_THRESHOLD ? 'Safe' : 'Danger';
+        csv += `${d.timestamp},${d.temperature},${d.pressure},${d.flow_rate},${d.tds},${safe}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `water_system_logs_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+// ============================================================
+// CLEAR DASHBOARD & RESET UI
+// ============================================================
+function clearDashboardData() {
+    if (confirm("Are you sure you want to clear all telemetry data on the screen? This resets the local display but maintains live connections for incoming data.")) {
+        allData = [];
+        resetUI();
+    }
+}
+
+function resetUI() {
+    // 1. Reset Stat Cards Values
+    document.getElementById('val-temp').textContent     = '--';
+    document.getElementById('val-pressure').textContent = '--';
+    document.getElementById('val-flow').textContent     = '--';
+    document.getElementById('val-tds').textContent      = '--';
+
+    // 2. Reset Radial Gauges to 0
+    updateRadialGauge('gauge-temp', 0, 100);
+    updateRadialGauge('gauge-pressure', 0, 100);
+    updateRadialGauge('gauge-flow', 0, 100);
+    updateRadialGauge('gauge-tds', 0, 100);
+
+    // 3. Reset Badge Statuses
+    const neutralBadge = { label: '--', color: '#64748b', bg: 'rgba(100,116,139,0.1)' };
+    applyBadge('badge-pressure', neutralBadge);
+    applyBadge('badge-flow',     neutralBadge);
+    applyBadge('badge-tds',      neutralBadge);
+
+    // 4. Reset System Diagnosis Banner
+    const banner   = document.getElementById('diag-banner');
+    const iconWrap = document.getElementById('diag-icon-wrap');
+    const text    = document.getElementById('diag-text');
+    const sub     = document.getElementById('diag-subtext');
+
+    banner.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
+    banner.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+    iconWrap.style.backgroundColor = 'rgba(148, 163, 184, 0.1)';
+    iconWrap.innerHTML = '<i id="diag-icon" data-lucide="loader" style="width:24px;height:24px;color:#64748b;"></i>';
+    text.textContent = 'Dashboard Cleared. Ready for new telemetry packet...';
+    text.style.color = '#64748b';
+    sub.textContent = 'The dashboard was wiped. Standard cloud polling and local servers are active.';
+
+    // 5. Reset Line Charts
+    function clearChart(chart) {
+        if (!chart) return;
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.update();
+    }
+    clearChart(tempChart);
+    clearChart(pressureChart);
+    clearChart(flowChart);
+    clearChart(tdsChart);
+
+    // 6. Reset Doughnut/Pie Charts
+    if (pieChart1) {
+        pieChart1.data.datasets[0].data = [1, 0];
+        pieChart1.update();
+    }
+    if (pieChart2) {
+        pieChart2.data.datasets[0].data = [0, 0];
+        pieChart2.update();
+    }
+
+    // 7. Reset Telemetry Table logs
+    document.getElementById('readings-table').innerHTML = `
+        <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400 text-xs">
+                <div class="flex flex-col items-center gap-1.5">
+                    <i data-lucide="info" class="w-6 h-6 text-slate-400"></i>
+                    <span>Telemetry log cleared. Waiting for the next live data packet...</span>
+                </div>
+            </td>
+        </tr>`;
+
+    // 8. Reset Last Sync Status Text
+    document.getElementById('last-sync').textContent = 'Dashboard cleared';
+
+    lucide.createIcons();
+}
+
+// ============================================================
+// LIVE CLOCK
+// ============================================================
+setInterval(() => {
+    const options = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+    document.getElementById('live-time').textContent = new Date().toLocaleTimeString([], options);
+}, 1000);
+
+// ============================================================
+// BOOTSTRAP
+// ============================================================
+initCharts();
+
+// First get initial historical values from ThingSpeak
+fetchThingSpeakData().then(() => {
+    // After historical sync, query local ESP32 every 2.5 seconds for instant updates
+    fetchRealTimeData(); // Immediate initial run
+    setInterval(fetchRealTimeData, 2500);
+});
+
+// Keep syncing with ThingSpeak every 30 minutes to refresh cloud trends
+setInterval(fetchThingSpeakData, 1800000);
+
+lucide.createIcons();
+
+</script>
+</body>
+</html>
+```
+!
